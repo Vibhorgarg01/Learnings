@@ -119,7 +119,7 @@ def ask_claude_about_dish(image_b64: str, media_type: str, dish_name: str) -> di
     Returns a dict. If parsing fails, returns a fallback error dict.
     """
     response = gemini_client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-3.6-flash",
         contents=[
             genai_types.Part.from_bytes(
                 data=base64.b64decode(image_b64),
@@ -193,6 +193,8 @@ def whatsapp_webhook():
 
     twiml_response = MessagingResponse()
 
+    logger.info("Incoming: from=%s num_media=%s body=%r", from_number, num_media, body_text)
+
     try:
         # Case 1: User sent an image (assume it's the menu)
         if num_media > 0:
@@ -209,15 +211,15 @@ def whatsapp_webhook():
                 "media_type": media_type,
             }
 
-            twiml_response.message(
-                "Got the menu! Now send me the name of the dish you want "
-                "ingredients for."
-            )
+            reply = "Got the menu! Now send me the name of the dish you want ingredients for."
+            twiml_response.message(reply)
+            logger.info("Image cached for %s, sent: %r", from_number, reply)
 
         # Case 2: User sent text (assume it's a dish name), and we have
         # a cached menu image for them
         elif body_text:
             cached = user_menu_cache.get(from_number)
+            logger.info("Text message from %s, cache hit=%s", from_number, cached is not None)
 
             if not cached:
                 twiml_response.message(
@@ -230,7 +232,9 @@ def whatsapp_webhook():
                     media_type=cached["media_type"],
                     dish_name=body_text,
                 )
-                twiml_response.message(format_reply(result))
+                reply = format_reply(result)
+                logger.info("Gemini result: %s | reply: %r", result, reply)
+                twiml_response.message(reply)
 
         else:
             twiml_response.message(
@@ -243,7 +247,9 @@ def whatsapp_webhook():
             "Something went wrong on my end. Please try again in a moment."
         )
 
-    return str(twiml_response)
+    twiml_str = str(twiml_response)
+    logger.info("TwiML response: %s", twiml_str)
+    return twiml_str
 
 
 # ---------------------------------------------------------------------------
